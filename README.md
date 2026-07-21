@@ -117,7 +117,7 @@ make deploy
 make health
 ```
 
-For the production host `singapore02`, clone the repository into `/docker/agent-gateway`, set `AGW_PUBLIC_BASE_URL=https://agent.zenmind.cc`, `AGW_COOKIE_SECURE=true`, and `AGW_BOOTSTRAP_HOSTS=agent.zenmind.cc` in the untracked `.env`. For first-time TLS provisioning, install `deploy/nginx/agent.zenmind.cc.http.conf`, issue the certificate with Certbot, then replace it with `deploy/nginx/agent.zenmind.cc.conf` and reload Nginx.
+For the production host `singapore02`, clone the repository into `/docker/agent-gateway`, set `AGW_PUBLIC_BASE_URL=https://agent.zenmind.cc`, `AGW_COOKIE_SECURE=true`, and `AGW_BOOTSTRAP_HOSTS=agent.zenmind.cc` in the untracked `.env`. For first-time TLS provisioning, install `deploy/nginx/agent.zenmind.cc.http.conf`, create `/var/www/letsencrypt`, issue the certificate with `certbot certonly --webroot -w /var/www/letsencrypt -d agent.zenmind.cc`, then replace the site with `deploy/nginx/agent.zenmind.cc.conf` and reload Nginx.
 
 ## 5. Operations
 
