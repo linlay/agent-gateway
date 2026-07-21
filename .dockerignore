@@ -8,3 +8,4 @@ backups
 *.db-wal
 *.pem
 coverage.out
+/agent-gateway
