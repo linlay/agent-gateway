@@ -1,0 +1,47 @@
+name: agent-gateway
+
+services:
+  agent-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-gateway:latest
+    container_name: agent-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      AGW_LISTEN_ADDR: ":11945"
+      AGW_SQLITE_PATH: /app/data/gateway.db
+      AGW_SPOOL_DIR: /app/data/spool
+      AGW_PLATFORM_JWT_PUBLIC_KEY_FILE: /run/secrets/platform_jwt_public
+      AGW_PLATFORM_JWT_PRIVATE_KEY_FILE: /run/secrets/platform_jwt_private
+    ports:
+      - "127.0.0.1:11945:11945"
+    volumes:
+      - gateway-data:/app/data
+    secrets:
+      - platform_jwt_public
+      - platform_jwt_private
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 25s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:11945/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+secrets:
+  platform_jwt_public:
+    file: ./configs/platform-jwt-public.pem
+  platform_jwt_private:
+    file: ./configs/platform-jwt-private.pem
+
+volumes:
+  gateway-data:
+    name: agent-gateway-data

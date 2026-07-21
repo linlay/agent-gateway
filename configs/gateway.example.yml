@@ -1,0 +1,20 @@
+# The first release is configured through environment variables. This file is
+# intentionally documentation-only so secrets never need to be committed.
+server:
+  listenAddr: :11945
+  publicBaseUrl: http://localhost:11945
+database:
+  driver: sqlite
+  sqlitePath: ./data/gateway.db
+resource:
+  spoolDir: ./data/spool
+  ticketTtl: 5m
+  spoolTtl: 30m
+  maxUploadBytes: 104857600
+limits:
+  requestsPerMinute: 240
+  maxConcurrentStreams: 8
+bootstrap:
+  tenantId: local
+  tenantName: Local
+  hosts: [localhost, 127.0.0.1]

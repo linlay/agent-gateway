@@ -1,0 +1,10 @@
+.env
+data/
+backups/
+bin/
+agent-gateway
+*.db
+*.db-shm
+*.db-wal
+*.pem
+coverage.out
