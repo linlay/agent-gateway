@@ -135,6 +135,7 @@ Keep exactly one active Gateway instance against a SQLite database. A normal `ma
 
 Gateway-local:
 
+- `GET /` (service status and endpoint discovery; available with zero platform connections)
 - `GET /api/gateway/session`
 - `GET /api/agents`
 - `GET /api/agent?agentKey=<publicKey>`

@@ -50,6 +50,7 @@ func New(cfg config.Config, st store.Store, browser *auth.Browser, channels *cha
 }
 
 func (s *Server) routes() {
+	s.mux.HandleFunc("/", s.handleRoot)
 	s.mux.HandleFunc("/healthz", s.handleHealth)
 	s.mux.HandleFunc("/metrics", s.handleMetrics)
 	s.mux.HandleFunc("/ws/agent", s.channels.ServePlatformHTTP)
@@ -60,7 +61,6 @@ func (s *Server) routes() {
 	s.mux.Handle("/auth/logout", s.withIdentity(http.HandlerFunc(s.handleLogout)))
 	s.mux.Handle("/ws", s.withIdentity(http.HandlerFunc(s.handleBrowserWS)))
 	s.mux.Handle("/api/", s.withIdentity(http.HandlerFunc(s.handleAPI)))
-	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +70,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.metrics.observe(observed.statusCode())
 	s.logger.Debug("http request", "method", r.Method, "path", r.URL.Path, "elapsed_ms", time.Since(started).Milliseconds())
 }
+
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service":             "agent-gateway",
+		"status":              "ok",
+		"platformConnections": s.channels.ConnectionCount(),
+		"endpoints": map[string]string{
+			"agents":  "/api/agents",
+			"health":  "/healthz",
+			"metrics": "/metrics",
+		},
+	})
+}
+
 func (s *Server) ListenAndServe() error {
 	err := s.httpServer.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
