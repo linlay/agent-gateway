@@ -28,4 +28,5 @@ These instructions apply to the entire repository.
 - The production checkout is `/docker/agent-gateway` on `singapore02` and is served as `https://agent.zenmind.cc` through host Nginx.
 - Use `make deploy` from the server checkout. Keep the service bound to `127.0.0.1:11945`; only Nginx should expose it publicly.
 - Preserve the Docker volume `agent-gateway-data` during redeployments. `make docker-down` must not be extended to delete volumes.
+- Keep the runtime privilege drop in `deploy/docker-entrypoint.sh`: it copies mounted key files into tmpfs, restricts them to `gateway`, and then uses `su-exec` before starting the requested command.
 - Validate with `make health`, `make check`, container health status, and the public HTTPS `/healthz` endpoint after deployment.
