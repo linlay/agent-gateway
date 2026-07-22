@@ -8,7 +8,7 @@ This release runs on SQLite only. The domain and `store.Store` boundary are data
 
 ### Scope and boundaries
 
-- Host-to-tenant resolution; browser OIDC Authorization Code + PKCE sessions; OIDC bearer JWTs; anonymous browser identities; CSRF and WebSocket Origin checks.
+- Host-to-tenant resolution; configurable local-password or OIDC Authorization Code + PKCE browser sessions; OIDC bearer JWTs; anonymous browser identities; CSRF and WebSocket Origin checks.
 - Platform RS256 JWT authentication at `GET /ws/agent?channelId=...`, keyed by `(tenant, platform, channel)`, with newest-connection-wins behavior.
 - Atomic `agent.catalog.begin` / `agent.card.update` / `agent.catalog.commit` snapshots plus legacy card upsert compatibility.
 - Disabled-by-default Gateway Agent projection, immutable public keys, public/authenticated/restricted visibility, permission-specific user/role/group ACLs, and optimistic policy versions.
@@ -39,6 +39,12 @@ The service listens on `:11945` by default. `/healthz` checks SQLite; `/metrics`
 Copy `.env.example` to `.env` and provide real values locally or on the deployment host. `.env` and PEM keys are ignored by Git and must never be committed. Environment variables are the only runtime configuration source; defaults and validation live in `internal/config/config.go`. [`configs/gateway.example.yml`](configs/gateway.example.yml) is documentation-only and is not parsed.
 
 For production, use an HTTPS `AGW_PUBLIC_BASE_URL`, keep `AGW_COOKIE_SECURE=true`, set `AGW_BOOTSTRAP_HOSTS` to the public host, generate independent random HMAC/admin secrets, and mount the platform RSA key pair as runtime secrets. See `.env.example` for the complete variable contract.
+
+### Browser authentication mode
+
+Set `AGW_AUTH_MODE=local` for the WebClient-owned `/login` page. Configure one bootstrap user with `AGW_LOCAL_USERNAME`, a quoted bcrypt value in `AGW_LOCAL_PASSWORD_HASH`, plus optional `AGW_LOCAL_DISPLAY_NAME` and comma-separated `AGW_LOCAL_ROLES`. The browser posts credentials to `POST /api/gateway/login`; Gateway rotates the session and returns only an HttpOnly session cookie.
+
+Set `AGW_AUTH_MODE=oidc` (the default) for external SSO. `GET /auth/login` starts Authorization Code + PKCE and `/auth/callback` creates the same Gateway session cookie. OIDC client secrets remain Gateway-side. Both modes expose their login/logout URLs through `GET /api/gateway/session`; anonymous sessions return 200 and are not themselves a login signal.
 
 ### Bootstrap tenant and OIDC
 
@@ -137,6 +143,8 @@ Gateway-local:
 
 - `GET /` (service status and endpoint discovery; available with zero platform connections)
 - `GET /api/gateway/session`
+- `POST /api/gateway/login` (local mode)
+- `POST /api/gateway/logout`
 - `GET /api/agents`
 - `GET /api/agent?agentKey=<publicKey>`
 - `/api/gateway/admin/*`
@@ -175,6 +183,4 @@ make vet
 make build
 ```
 
-Tests cover catalog atomicity/removal, cross-tenant isolation, duplicate external keys on different channels, ACL/action intersection, local limits, SQLite backup/integrity, and a real platform JWT/WebSocket catalog exchange.
-
-The required upstream/frontend changes are intentionally not made in their repositories. Use [`docs/PROMPT_PLATFORM.md`](docs/PROMPT_PLATFORM.md) and [`docs/PROMPT_WEBCLIENT.md`](docs/PROMPT_WEBCLIENT.md) as implementation prompts.
+Tests cover catalog atomicity/removal, cross-tenant isolation, duplicate external keys on different channels, ACL/action intersection, local and OIDC browser sessions, local limits, SQLite backup/integrity, and a real platform JWT/WebSocket catalog exchange.

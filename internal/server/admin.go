@@ -15,7 +15,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	principal := principalFromContext(r.Context())
 	if !policy.IsTenantAdmin(principal) {
 		if !principal.Authenticated {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 		writeAPIError(w, http.StatusForbidden, "admin_required", "Tenant administrator role is required")

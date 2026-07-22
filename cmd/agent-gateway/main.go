@@ -65,7 +65,15 @@ func main() {
 		os.Exit(1)
 	}
 	oidc := auth.NewOIDC()
-	browserAuth := auth.NewBrowser(st, oidc, cfg.CookieSecure, cfg.SessionTTL, cfg.AnonymousTTL, cfg.BootstrapAdminToken)
+	var localAuth *auth.Local
+	if cfg.AuthMode == "local" {
+		localAuth, err = auth.NewLocal(cfg.LocalUsername, cfg.LocalPasswordHash, cfg.LocalDisplayName, cfg.LocalRoles)
+		if err != nil {
+			logger.Error("local authentication configuration failed", "error", err)
+			os.Exit(2)
+		}
+	}
+	browserAuth := auth.NewBrowser(st, oidc, localAuth, cfg.CookieSecure, cfg.SessionTTL, cfg.AnonymousTTL, cfg.BootstrapAdminToken)
 	channels := channel.NewManager(st, platformTokens, logger, cfg.MaxWSMessageBytes, cfg.WriteQueueSize, cfg.PlatformRequestTimeout)
 	httpServer := server.New(cfg, st, browserAuth, channels, platformTokens, logger)
 

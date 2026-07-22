@@ -51,7 +51,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if !policy.Can(agent, principal, domain.PermissionDiscover) {
 		if !principal.Authenticated && agent.Enabled {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 		writeAPIError(w, http.StatusForbidden, "forbidden", "Agent is not available to this user")

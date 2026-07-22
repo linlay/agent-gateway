@@ -114,7 +114,7 @@ func (s *Server) withIdentity(next http.Handler) http.Handler {
 		}
 		principal, err := s.browser.Resolve(w, r, tenant)
 		if err != nil {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 		if !s.browser.ValidateCSRF(r, principal) {
@@ -129,9 +129,12 @@ func (s *Server) withIdentity(next http.Handler) http.Handler {
 	})
 }
 
-func writeUnauthorized(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("WWW-Authenticate", `Bearer realm="agent-gateway"`)
-	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": map[string]any{"code": "authentication_required", "message": "Authentication is required", "loginUrl": "/auth/login?return_to=" + url.QueryEscape(safeReturnTo(r))}})
+func (s *Server) writeUnauthorized(w http.ResponseWriter, r *http.Request) {
+	loginPath := "/auth/login"
+	if s.cfg.AuthMode == "local" {
+		loginPath = "/login"
+	}
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": map[string]any{"code": "authentication_required", "message": "Authentication is required", "loginUrl": loginPath + "?return_to=" + url.QueryEscape(safeReturnTo(r))}})
 }
 func safeReturnTo(r *http.Request) string {
 	if r == nil {
@@ -175,19 +178,25 @@ func (s *Server) baseURL(r *http.Request) string {
 
 func validReturnTo(value string) string {
 	value = strings.TrimSpace(value)
-	if value == "" || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") {
+	if value == "" || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || strings.Contains(value, "\\") {
 		return "/"
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" {
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || strings.Contains(parsed.Path, "\\") {
 		return "/"
 	}
-	return parsed.RequestURI()
+	return parsed.String()
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.cfg.AuthMode == "local" {
+		returnTo := validReturnTo(r.URL.Query().Get("return_to"))
+		destination := "/login?return_to=" + url.QueryEscape(returnTo)
+		http.Redirect(w, r, destination, http.StatusFound)
 		return
 	}
 	tenant := tenantFromContext(r.Context())
@@ -213,6 +222,39 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, destination, http.StatusFound)
+}
+
+func (s *Server) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.cfg.AuthMode != "local" {
+		writeAPIError(w, http.StatusNotFound, "local_login_disabled", "Local login is not enabled")
+		return
+	}
+	var request struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &request); err != nil || len(request.Username) > 256 || len(request.Password) > 4096 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_login_request", "Username and password are required")
+		return
+	}
+	identity, ok := s.browser.AuthenticateLocal(request.Username, request.Password)
+	if !ok {
+		s.audit(r.Context(), "anonymous", "auth.login", tenantFromContext(r.Context()).ID, "failure", map[string]any{"method": "local"})
+		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid username or password")
+		return
+	}
+	tenant := tenantFromContext(r.Context())
+	principal := principalFromContext(r.Context())
+	if err := s.browser.RotateSession(r.Context(), w, r, tenant.ID, identity, principal.AnonymousID); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "session_create_failed", "Could not create session")
+		return
+	}
+	s.audit(r.Context(), identity.Subject, "auth.login", tenant.ID, "success", map[string]any{"method": "local"})
+	writeJSON(w, http.StatusOK, map[string]any{"loggedIn": true})
 }
 
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +283,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusUnauthorized, "oidc_exchange_failed", err.Error())
 		return
 	}
-	if err := s.browser.CreateSession(r.Context(), w, tenant.ID, identity, flow.AnonymousID); err != nil {
+	if err := s.browser.RotateSession(r.Context(), w, r, tenant.ID, identity, flow.AnonymousID); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "session_create_failed", "Could not create session")
 		return
 	}

@@ -27,10 +27,11 @@ type Browser struct {
 	sessionTTL          time.Duration
 	anonymousTTL        time.Duration
 	bootstrapAdminToken string
+	local               *Local
 }
 
-func NewBrowser(st store.Store, oidc *OIDC, secure bool, sessionTTL, anonymousTTL time.Duration, bootstrapAdminToken string) *Browser {
-	return &Browser{store: st, oidc: oidc, secure: secure, sessionTTL: sessionTTL, anonymousTTL: anonymousTTL, bootstrapAdminToken: strings.TrimSpace(bootstrapAdminToken)}
+func NewBrowser(st store.Store, oidc *OIDC, local *Local, secure bool, sessionTTL, anonymousTTL time.Duration, bootstrapAdminToken string) *Browser {
+	return &Browser{store: st, oidc: oidc, local: local, secure: secure, sessionTTL: sessionTTL, anonymousTTL: anonymousTTL, bootstrapAdminToken: strings.TrimSpace(bootstrapAdminToken)}
 }
 
 func (b *Browser) Resolve(w http.ResponseWriter, r *http.Request, tenant domain.Tenant) (domain.Principal, error) {
@@ -99,6 +100,15 @@ func (b *Browser) CreateSession(ctx context.Context, w http.ResponseWriter, tena
 	return nil
 }
 
+func (b *Browser) RotateSession(ctx context.Context, w http.ResponseWriter, r *http.Request, tenantID string, identity OIDCIdentity, anonymousID string) error {
+	if cookie, err := r.Cookie(SessionCookieName); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		if err := b.store.DeleteWebSession(ctx, tenantID, HashToken(cookie.Value)); err != nil {
+			return err
+		}
+	}
+	return b.CreateSession(ctx, w, tenantID, identity, anonymousID)
+}
+
 func (b *Browser) Logout(ctx context.Context, w http.ResponseWriter, tenantID string, r *http.Request) error {
 	if cookie, err := r.Cookie(SessionCookieName); err == nil {
 		_ = b.store.DeleteWebSession(ctx, tenantID, HashToken(cookie.Value))
@@ -126,3 +136,9 @@ func (b *Browser) clearCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", HttpOnly: true, Secure: b.secure, SameSite: http.SameSiteLaxMode, Expires: time.Unix(0, 0), MaxAge: -1})
 }
 func (b *Browser) OIDC() *OIDC { return b.oidc }
+func (b *Browser) AuthenticateLocal(username, password string) (OIDCIdentity, bool) {
+	if b.local == nil {
+		return OIDCIdentity{}, false
+	}
+	return b.local.Authenticate(username, password)
+}

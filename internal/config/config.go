@@ -39,6 +39,11 @@ type Config struct {
 	RateLimitPerMinute        int
 	MaxConcurrentStreams      int
 	AllowedBrowserOrigins     []string
+	AuthMode                  string
+	LocalUsername             string
+	LocalPasswordHash         string
+	LocalDisplayName          string
+	LocalRoles                []string
 }
 
 func Load() (Config, error) {
@@ -70,6 +75,11 @@ func Load() (Config, error) {
 		RateLimitPerMinute:        int(envInt64("AGW_RATE_LIMIT_PER_MINUTE", 240)),
 		MaxConcurrentStreams:      int(envInt64("AGW_MAX_CONCURRENT_STREAMS", 8)),
 		AllowedBrowserOrigins:     csvEnv("AGW_ALLOWED_BROWSER_ORIGINS", nil),
+		AuthMode:                  strings.ToLower(env("AGW_AUTH_MODE", "oidc")),
+		LocalUsername:             strings.TrimSpace(os.Getenv("AGW_LOCAL_USERNAME")),
+		LocalPasswordHash:         strings.TrimSpace(os.Getenv("AGW_LOCAL_PASSWORD_HASH")),
+		LocalDisplayName:          strings.TrimSpace(os.Getenv("AGW_LOCAL_DISPLAY_NAME")),
+		LocalRoles:                csvEnv("AGW_LOCAL_ROLES", []string{"user"}),
 	}
 	if cfg.DatabaseDriver != "sqlite" {
 		return Config{}, fmt.Errorf("database driver %q is not available in this release; use sqlite", cfg.DatabaseDriver)
@@ -91,6 +101,15 @@ func Load() (Config, error) {
 	}
 	if cfg.BootstrapTenantID == "" || len(cfg.BootstrapHosts) == 0 {
 		return Config{}, errors.New("bootstrap tenant id and at least one host are required")
+	}
+	if cfg.AuthMode != "oidc" && cfg.AuthMode != "local" {
+		return Config{}, errors.New("AGW_AUTH_MODE must be oidc or local")
+	}
+	if cfg.AuthMode == "local" && (cfg.LocalUsername == "" || cfg.LocalPasswordHash == "") {
+		return Config{}, errors.New("AGW_LOCAL_USERNAME and AGW_LOCAL_PASSWORD_HASH are required in local auth mode")
+	}
+	if cfg.LocalDisplayName == "" {
+		cfg.LocalDisplayName = cfg.LocalUsername
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath), 0o700); err != nil {
 		return Config{}, fmt.Errorf("create sqlite directory: %w", err)

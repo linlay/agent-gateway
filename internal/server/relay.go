@@ -35,6 +35,13 @@ type upstreamFrame struct {
 
 var errRateLimited = errors.New("rate limit exceeded")
 
+func normalizeUpstreamAuthError(status int, code string, message string) (int, string, string) {
+	if status == http.StatusUnauthorized {
+		return http.StatusBadGateway, "upstream_auth_failed", "Platform upstream authentication failed"
+	}
+	return status, code, message
+}
+
 func agentRateKeys(agent domain.GatewayAgent) []string {
 	return []string{"agent:" + agent.TenantID + ":" + agent.ID, "channel:" + agent.TenantID + ":" + agent.Route.PlatformID + ":" + agent.Route.ChannelID}
 }
@@ -304,7 +311,7 @@ func (s *Server) writeRelayError(w http.ResponseWriter, r *http.Request, err err
 	if errors.Is(err, store.ErrNotFound) {
 		status = http.StatusForbidden
 		if !principalFromContext(r.Context()).Authenticated {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 	} else if errors.Is(err, store.ErrConflict) {
@@ -333,7 +340,8 @@ func (s *Server) relayHTTPFrames(w http.ResponseWriter, r *http.Request, frames 
 		if status < 400 || status > 599 {
 			status = http.StatusBadGateway
 		}
-		writeAPIError(w, status, parsed.Type, parsed.Msg)
+		status, code, message := normalizeUpstreamAuthError(status, parsed.Type, parsed.Msg)
+		writeAPIError(w, status, code, message)
 		_ = s.store.UpdateRunProgress(context.Background(), run.TenantID, run.RunID, "error", run.LastSeq, time.Now().UnixMilli())
 		return
 	}

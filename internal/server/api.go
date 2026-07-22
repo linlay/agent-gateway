@@ -11,6 +11,10 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/api/gateway/session":
 		s.handleSession(w, r)
+	case r.URL.Path == "/api/gateway/login":
+		s.handleLocalLogin(w, r)
+	case r.URL.Path == "/api/gateway/logout":
+		s.handleLogout(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/gateway/admin/"):
 		s.handleAdmin(w, r)
 	case r.URL.Path == "/api/agents":
@@ -49,10 +53,17 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	tenant := tenantFromContext(r.Context())
 	principal := principalFromContext(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"tenant": map[string]any{"tenantId": tenant.ID, "name": tenant.Name}, "authenticated": principal.Authenticated, "user": func() any {
+	loginURL := "/auth/login"
+	loginMode := "sso"
+	if s.cfg.AuthMode == "local" {
+		loginURL = "/login"
+		loginMode = "local"
+	}
+	logoutURL := "/api/gateway/logout"
+	writeJSON(w, http.StatusOK, map[string]any{"tenant": map[string]any{"displayName": tenant.Name}, "authenticated": principal.Authenticated, "user": func() any {
 		if !principal.Authenticated {
 			return nil
 		}
 		return map[string]any{"subject": principal.Subject, "name": principal.DisplayName, "roles": principal.Roles, "groups": principal.Groups}
-	}(), "csrfToken": principal.CSRFToken, "loginUrl": "/auth/login", "logoutUrl": "/auth/logout", "features": map[string]bool{"chat": true, "hitl": true, "files": true, "admin": policy.IsTenantAdmin(principal), "memory": false, "automation": false, "terminal": false, "agentManagement": false, "modelOverride": false}})
+	}(), "csrfToken": principal.CSRFToken, "auth": map[string]any{"mode": loginMode, "loginUrl": loginURL, "logoutUrl": logoutURL}, "loginUrl": loginURL, "logoutUrl": logoutURL, "features": map[string]bool{"chat": true, "hitl": true, "files": true, "upload": true, "download": true, "admin": policy.IsTenantAdmin(principal), "memory": false, "automation": false, "terminal": false, "agentManagement": false, "modelOverride": false}})
 }

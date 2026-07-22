@@ -18,3 +18,8 @@ bootstrap:
   tenantId: local
   tenantName: Local
   hosts: [localhost, 127.0.0.1]
+auth:
+  # Documentation mirror only; configure AGW_AUTH_MODE in the runtime environment.
+  mode: oidc
+  # Local mode additionally uses AGW_LOCAL_USERNAME, AGW_LOCAL_PASSWORD_HASH,
+  # AGW_LOCAL_DISPLAY_NAME, and AGW_LOCAL_ROLES.

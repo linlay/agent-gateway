@@ -148,7 +148,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	agent, err := s.bindingAgent(r, chat, domain.PermissionFileTransfer)
 	if err != nil || !routeOperationAllowed(agent, "fileTransfer") {
 		if !principal.Authenticated {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 		writeAPIError(w, http.StatusForbidden, "file_transfer_forbidden", "File transfer is not allowed")
@@ -196,7 +196,7 @@ func (s *Server) handleResource(w http.ResponseWriter, r *http.Request) {
 	agent, err := s.bindingAgent(r, chat, domain.PermissionFileTransfer)
 	if err != nil || !routeOperationAllowed(agent, "fileTransfer") {
 		if !principal.Authenticated {
-			writeUnauthorized(w, r)
+			s.writeUnauthorized(w, r)
 			return
 		}
 		writeAPIError(w, http.StatusForbidden, "resource_forbidden", "Resource is not available to this user")

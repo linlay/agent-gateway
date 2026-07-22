@@ -254,6 +254,12 @@ func (s *Server) proxyBrowserStream(conn *browserConnection, frontendID, request
 			run.LastSeq = number
 			_ = s.store.UpdateRunProgress(context.Background(), run.TenantID, run.RunID, "running", run.LastSeq, time.Now().UnixMilli())
 		}
+		if object["frame"] == channel.FrameError && numberValue(object["code"]) == http.StatusUnauthorized {
+			code, typeName, message := normalizeUpstreamAuthError(int(numberValue(object["code"])), textValue(object["type"]), textValue(object["msg"]))
+			object["code"] = code
+			object["type"] = typeName
+			object["msg"] = message
+		}
 		if !conn.sendValue(object) {
 			return
 		}
